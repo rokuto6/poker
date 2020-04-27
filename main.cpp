@@ -13,7 +13,6 @@ using namespace std;
  * 今後はコンピュータを強くしてって最終的に人工知能の学習とかに持っていきたい。
  *
  * 今の所：コンピュータは全てのアクションを等確率で選択します。とても雑魚です。
- *
  */
 
 int numPlayer;
@@ -217,16 +216,26 @@ void computerPlay(int *valBet, int *sunkCost, int *stack, bool *active, int comN
 }
 
 
-void bettingRound(int *valBet, int *sunkCost, int *stack, bool *active, int *position){
+void bettingRound(int *valBet, int *sunkCost, int *stack, bool *active, int *position, bool *end){
     int i, j;
+    int numActive = 0;
     displayAllHand(active, position);
+    bool allPlayed = false, around = false, whileJump = false;
     while(true) {
-        bool allPlayed = false, around = false, whileJump = false;
         for (i = 0; i < numPlayer; i++) {
             if (position[i] == 0 && active[i]) {
                 humanPlay(valBet, sunkCost+i, stack+i, active+i);
             }else if(active[i]){
                 computerPlay(valBet, sunkCost+i, stack+i, active+i, position[i]);
+            }
+            for(j = 0; j < numPlayer; j++){ // 全員fの時の対応
+                if(active[j]) numActive++;
+            }
+            if(numActive == 1){
+                cout << "fold end!" << endl;
+                *end = true;
+                whileJump = true;
+                break;
             }
             for (j = 0; j < numPlayer; j++) {
                 if(active[j] && *valBet != sunkCost[j]) break;
@@ -242,8 +251,29 @@ void bettingRound(int *valBet, int *sunkCost, int *stack, bool *active, int *pos
                 break;
             }
             around = false; // aroundがtrueのままだと一周したら自動で終わっちゃうので
+            numActive = 0;
         }
         if(whileJump) break;
+    }
+}
+
+void slide(int *stack, bool *active, int *position){
+    int i;
+    int temsta[numPlayer], tempos[numPlayer];
+    bool temact[numPlayer]; // 一時的に置く配列
+    hand temhand[numPlayer];
+    for(i = 0; i < numPlayer; i++) {
+        int index = (i - 2 + numPlayer) % numPlayer;
+        temsta[i] = stack[index]; // ポスフロはSBからのアクションなのでずらしている
+        temact[i] = active[index];
+        tempos[i] = position[index];
+        temhand[i] = handList[index];
+    }
+    for(i = 0; i < numPlayer; i++){
+        stack[i] = temsta[i];
+        active[i] = temact[i];
+        position[i] = tempos[i];
+        handList[i] = temhand[i];
     }
 }
 
@@ -288,18 +318,23 @@ void displayBoard(char occ){ // ボード表示
     cout << endl;
 }
 
-void changeRound(int *valBet, int *sunkCost, char occ, int *stack, bool *active, int *position){
+void performRound(int *valBet, int *sunkCost, char occ, int *stack, bool *active, int *position, bool *end){
     // ラウンド変更の際に呼び出し。3回あるので流石に何回も書くのはアホらしい。
+    int i;
     *valBet = 0;
-    for(int i = 0; i < numPlayer; i++){
+    for(i = 0; i < numPlayer; i++){
         *(sunkCost+i) = 0;
     }
     displayBoard(occ);
-    bettingRound(valBet, sunkCost, stack, active, position);
+    bettingRound(valBet, sunkCost, stack, active, position, end);
+    if(occ == 'r' && !*end){
+        cout << "showdown!" << endl;
+        *end = true;
+    }
 }
 
 int main() {
-    srand((unsigned int)time(NULL)); //　乱数初期化はmainでやらないとダメそうdamesou
+    srand((unsigned int)time(NULL)); //　乱数初期化はmainでやらないとダメそう
     int i, j, valBet = 2;
     decideNumPlayer();
     numPlayer++;
@@ -316,38 +351,24 @@ int main() {
     }
     initializecardList();
     //for(i = 0; i < 1; i++) {
+        bool end = false;
         shuffleCardList();
         dealHands();
-        bettingRound(&valBet, sunkCost, stack, active, position);
+        bettingRound(&valBet, sunkCost, stack, active, position, &end);
         for(i = 0; i < 3; i++){
             board[i] = cardList[numPlayer*2+i];
         }
         board[3] = cardList[numPlayer*2+5];
         board[4] = cardList[numPlayer*2+7];
-        for(i = 0; i < numPlayer; i++){
-            cout << position[i] << endl;
+        slide(stack, active, position);
+        if(!end) {
+            performRound(&valBet, sunkCost, 'f', stack, active, position, &end);
         }
-        for(i = 0; i < numPlayer; i++){
-            int index = (i - 2 + numPlayer) % numPlayer;
-            int temsta[numPlayer], tempos[numPlayer];
-            bool temact[numPlayer]; // 一時的に置く配列
-            temsta[i] = stack[index]; // ポスフロはSBからのアクションなのでずらしている
-            temact[i] = active[index];
-            tempos[i] = position[index];
-            if(i == numPlayer-1){
-                for(j = 0; j < numPlayer; j++){
-                    stack[j] = temsta[j];
-                    active[j] = temact[j];
-                    position[j] = tempos[j];
-                }
-            }
+        if(!end) {
+            performRound(&valBet, sunkCost, 't', stack, active, position, &end);
         }
-        for(i = 0; i < numPlayer; i++){
-            cout << position[i] << endl;
+        if(!end) {
+            performRound(&valBet, sunkCost, 'r', stack, active, position, &end);
         }
-        changeRound(&valBet, sunkCost, 'f', stack, active, position);
-        changeRound(&valBet, sunkCost, 't', stack, active, position);
-        changeRound(&valBet, sunkCost, 'r', stack, active, position);
-        cout << "showdown!" << endl;
     //}
 }
