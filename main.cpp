@@ -14,10 +14,6 @@ using namespace std;
  *
  * 今の所：コンピュータは全てのアクションを等確率で選択します。とても雑魚です。
  *
- * 4/26 未来の俺は以下を解決してください。
- * ・computerPlayのcomnumの修正
- * ・ポストフロップでBBがアクションをせずにボタンの自分にアクションが回ってくる問題
- *
  */
 
 int numPlayer;
@@ -95,18 +91,22 @@ void displayHand(hand hand1){ //ハンドの表示。カードはpairで作っ�
     cout << endl;
 }
 
-void displayAllHand(int numPlayer, hand handList[]){
+void displayAllHand(bool *active, int *position){
     // 卓の人のカードを全部表示。将来なくなるorショーダウンで使うかな？
     int i;
-    cout << "your hand is ";
-    displayHand(handList[0]);
-    for(i = 1; i < numPlayer; i++){
-        cout << "opponent" << i << " hand is ";
-        displayHand(handList[i]);
+    for(i = 0; i < numPlayer; i++){
+        if(position[i] == 0 && active[i]) {
+            cout << "your hand is ";
+            displayHand(handList[i]);
+        }
+        else if(active[i]) {
+            cout << "com" << position[i] << " hand is ";
+            displayHand(handList[i]);
+        }
     }
 }
 
-void humanPlay(int *valBet, int *sunkCost, int *stack, bool *active){
+void humanPlay(int *valBet, int *sunkCost, int *stack, bool *active, int posPlayer){
     // 人間のプレイ方法。キーボードから入力受け取り。
     int playerBet;
     char action;
@@ -114,7 +114,7 @@ void humanPlay(int *valBet, int *sunkCost, int *stack, bool *active){
         //このwhileは指定文字以外が入力されたときに再入力させるため。
         //なので全アクション完了時はreturnになってる。
         cout << "アクションを決めてください" << endl;
-        if(*valBet == *sunkCost) {
+        if(*valBet == sunkCost[posPlayer]) {
             cout << "x : チェック,  b,r : ベット" << endl;
             cin >> action;
             if (action == 'x') {
@@ -127,13 +127,13 @@ void humanPlay(int *valBet, int *sunkCost, int *stack, bool *active){
             cin >> action;
             if (action == 'f') {
                 cout << "you fold" << endl;
-                *active = false;
+                active[posPlayer] = false;
                 return;
             }
             else if (action == 'c') {
                 cout << "you call" << endl;
-                *sunkCost = *valBet;
-                *stack -= *valBet - *sunkCost;
+                sunkCost[posPlayer] = *valBet;
+                stack[posPlayer] -= *valBet - sunkCost[posPlayer];
                 return;
             }
         }
@@ -150,15 +150,15 @@ void humanPlay(int *valBet, int *sunkCost, int *stack, bool *active){
                 else if(playerBet < *valBet){ //　最小ベット額まだやってない
                     cout << "少なすぎるよ！" << endl;
                     continue;
-                }else if(playerBet > *stack){
+                }else if(playerBet > stack[posPlayer]){
                     cout << "持ってるチップより多いじゃん！" << endl;
                     continue;
                 }
                 break;
             }
-            *stack -= *valBet - *sunkCost;
+            stack[posPlayer] -= *valBet - sunkCost[posPlayer];
             *valBet = playerBet;
-            *sunkCost = playerBet;
+            sunkCost[posPlayer] = playerBet;
             cout << "you raise to " << *valBet << endl;
             return;
         }
@@ -176,7 +176,7 @@ void computerPlay(int *valBet, int *sunkCost, int *stack, bool *active, int comN
         if (percent == 0) {
             cout << "com" << comNum << " check" << endl;
         }else{
-            *valBet = *valBet * 5 / 2;
+            *valBet = max(5, *valBet * 5 / 2); // valBet == 0 の時に額が0になったので暫定処置
             *stack -= *valBet - *sunkCost;
             *sunkCost = *valBet;
             cout << "com" << comNum << " raise to " << *valBet << endl;
@@ -216,24 +216,28 @@ void computerPlay(int *valBet, int *sunkCost, int *stack, bool *active, int comN
     }
 }
 
-void computerBetting(int *valBet, int *sunkCost, int *stack, bool *active, int i, bool *around){
+void computerBetting(int *valBet, int *sunkCost, int *stack, bool *active, int i, bool *around, bool *allPlayed){
     // bettingRoundで使う用。何回も書きたくないので小分け。
     computerPlay(valBet, sunkCost+i, stack+i, active+i, i);
     for (int j = 0; j < numPlayer; j++) {
-        if(active[j] && *valBet != *(sunkCost+j)) break;
+        if(active[j] && *valBet != sunkCost[j]) break;
         if(j == numPlayer - 1) *around = true;
+    }
+    for (int j = i+1; j < numPlayer; j++) {
+        if(active[j]) break;
+        if(j == numPlayer - 1) *allPlayed = true;
     }
 }
 
-void bettingRound(int *valBet, int *sunkCost, int *stack, bool *active, int posPlayer){
+void bettingRound(int *valBet, int *sunkCost, int *stack, bool *active, int posPlayer, int *position){
     int i;
     bool allPlayed = false; //判定方法的に全員一回プレイしたかを見る必要があるため。
-    displayAllHand(numPlayer, handList);
+    displayAllHand(active, position);
     while(true) {
         bool around = false, whileJump = false;
         for (i = 0; i < posPlayer; i++) {
             if(active[i]) {
-                computerBetting(valBet, sunkCost, stack, active, i, &around);
+                computerBetting(valBet, sunkCost, stack, active, i, &around, &allPlayed);
                 if(around && allPlayed){
                     whileJump = true;
                     break;
@@ -243,18 +247,24 @@ void bettingRound(int *valBet, int *sunkCost, int *stack, bool *active, int posP
         }
         if(whileJump) break;
         if (active[posPlayer]) {
-            humanPlay(valBet, sunkCost, stack, active);
+            humanPlay(valBet, sunkCost, stack, active, posPlayer);
             for (i = 0; i < numPlayer; i++) {
                 if(active[i]) {
-                    if (*valBet != *(sunkCost+i)) break;
+                    if (*valBet != sunkCost[i]) break;
                 }
                 if(i == numPlayer - 1) around = true;
             }
+            for (int j = posPlayer+1; j < numPlayer; j++) {
+                if(active[j]) break;
+                if(j == numPlayer - 1) allPlayed = true;
+            }
             if(around && allPlayed) break;
+            around = false;
         }
         for (i = posPlayer+1; i < numPlayer; i++) {
             if(active[i]) {
-                computerBetting(valBet, sunkCost, stack, active, i, &around);
+                computerBetting(valBet, sunkCost, stack, active, i, &around, &allPlayed);
+                if(i == numPlayer-1) allPlayed = true;
                 if(around && allPlayed){
                     whileJump = true;
                     break;
@@ -263,13 +273,13 @@ void bettingRound(int *valBet, int *sunkCost, int *stack, bool *active, int posP
             }
         }
         if(whileJump) break;
-        allPlayed = true;
     }
 }
 
-void displayBoard(vector<card> board, char occ){ // ボード表示
+void displayBoard(char occ){ // ボード表示
     int i;
     if(occ == 'f') {
+        cout << endl;
         cout << "flop" << endl;
         cout << "board: ";
         for(i = 0; i < 3; i++) {
@@ -279,6 +289,7 @@ void displayBoard(vector<card> board, char occ){ // ボード表示
         cout << endl;
     }
     if(occ == 't') {
+        cout << endl;
         cout << "turn" << endl;
         cout << "turn card is ";
         displayCard(board[3]);
@@ -291,8 +302,9 @@ void displayBoard(vector<card> board, char occ){ // ボード表示
         cout << endl;
     }
     if(occ == 'r') {
+        cout << endl;
         cout << "river" << endl;
-        cout << "turn card is ";
+        cout << "river card is ";
         displayCard(board[4]);
         cout << endl;
         cout << "board: ";
@@ -300,55 +312,73 @@ void displayBoard(vector<card> board, char occ){ // ボード表示
             displayCard(board[i]);
             cout << " ";
         }
-        cout << endl << endl;
+        cout << endl;
     }
+    cout << endl;
 }
 
-void changeRound(int *valBet, int *sunkCost, char occ, int *stack, bool *active, int posPlayer){
+void changeRound(int *valBet, int *sunkCost, char occ, int *stack, bool *active, int posPlayer, int *position){
     // ラウンド変更の際に呼び出し。3回あるので流石に何回も書くのはアホらしい。
     *valBet = 0;
     for(int i = 0; i < numPlayer; i++){
         *(sunkCost+i) = 0;
     }
-    displayBoard(board, occ);
-    bettingRound(valBet, sunkCost, stack, active, posPlayer);
+    displayBoard(occ);
+    bettingRound(valBet, sunkCost, stack, active, posPlayer, position);
 }
 
 int main() {
     srand((unsigned int)time(NULL)); //　乱数初期化はmainでやらないとダメそうdamesou
-    int i, valBet = 2, posPlayer = 0;
+    int i, j, valBet = 2, posPlayer = 0;
     decideNumPlayer();
     numPlayer++;
-    int stackPreflop[numPlayer], stackPostflop[numPlayer], sunkCost[numPlayer];
-    bool activePreflop[numPlayer], activePostflop[numPlayer];
+    int stack[numPlayer], sunkCost[numPlayer];
+    int position[numPlayer];
+    bool active[numPlayer];
     for(i = 0; i < numPlayer; i++){
-        stackPreflop[i] = 200;
+        stack[i] = 200;
         if(i == numPlayer - 2) sunkCost[i] = 1;
         else if(i == numPlayer - 1) sunkCost[i] = 2;
         else sunkCost[i] = 0;
-        activePreflop[i] = true;
+        active[i] = true;
+        position[i] = i;
     }
     initializecardList();
     //for(i = 0; i < 1; i++) {
         shuffleCardList();
         dealHands();
-        bettingRound(&valBet, sunkCost, stackPreflop, activePreflop, posPlayer);
+        bettingRound(&valBet, sunkCost, stack, active, posPlayer, position);
         for(i = 0; i < 3; i++){
             board[i] = cardList[numPlayer*2+i];
         }
         board[3] = cardList[numPlayer*2+5];
         board[4] = cardList[numPlayer*2+7];
-        posPlayer -= 2;
-        if(posPlayer < 0) posPlayer += numPlayer;
+        posPlayer += 2;
         for(i = 0; i < numPlayer; i++){
-            int blindGap = i - 2;
-            if(blindGap < 0) blindGap += numPlayer;
-            stackPostflop[i] = stackPreflop[blindGap]; // ポスフロはSBからのアクションなのでずらしている
-            activePostflop[i] = activePreflop[blindGap];
+            cout << position[i] << endl;
         }
-        changeRound(&valBet, sunkCost, 'f', stackPostflop, activePostflop, posPlayer);
-        changeRound(&valBet, sunkCost, 't', stackPostflop, activePostflop, posPlayer);
-        changeRound(&valBet, sunkCost, 'r', stackPostflop, activePostflop, posPlayer);
+        if(posPlayer >= numPlayer) posPlayer -= numPlayer;
+        for(i = 0; i < numPlayer; i++){
+            int index = (i - 2 + numPlayer) % numPlayer;
+            int temsta[numPlayer], tempos[numPlayer];
+            bool temact[numPlayer]; // 一時的に置く配列
+            temsta[i] = stack[index]; // ポスフロはSBからのアクションなのでずらしている
+            temact[i] = active[index];
+            tempos[i] = position[index];
+            if(i == numPlayer-1){
+                for(j = 0; j < numPlayer; j++){
+                    stack[j] = temsta[j];
+                    active[j] = temact[j];
+                    position[j] = tempos[j];
+                }
+            }
+        }
+        for(i = 0; i < numPlayer; i++){
+            cout << position[i] << endl;
+        }
+        changeRound(&valBet, sunkCost, 'f', stack, active, posPlayer, position);
+        changeRound(&valBet, sunkCost, 't', stack, active, posPlayer, position);
+        changeRound(&valBet, sunkCost, 'r', stack, active, posPlayer, position);
         cout << "showdown!" << endl;
     //}
 }
