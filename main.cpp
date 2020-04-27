@@ -106,7 +106,7 @@ void displayAllHand(bool *active, int *position){
     }
 }
 
-void humanPlay(int *valBet, int *sunkCost, int *stack, bool *active, int posPlayer){
+void humanPlay(int *valBet, int *sunkCost, int *stack, bool *active){
     // 人間のプレイ方法。キーボードから入力受け取り。
     int playerBet;
     char action;
@@ -114,7 +114,7 @@ void humanPlay(int *valBet, int *sunkCost, int *stack, bool *active, int posPlay
         //このwhileは指定文字以外が入力されたときに再入力させるため。
         //なので全アクション完了時はreturnになってる。
         cout << "アクションを決めてください" << endl;
-        if(*valBet == sunkCost[posPlayer]) {
+        if(*valBet == *sunkCost) {
             cout << "x : チェック,  b,r : ベット" << endl;
             cin >> action;
             if (action == 'x') {
@@ -127,13 +127,13 @@ void humanPlay(int *valBet, int *sunkCost, int *stack, bool *active, int posPlay
             cin >> action;
             if (action == 'f') {
                 cout << "you fold" << endl;
-                active[posPlayer] = false;
+                *active = false;
                 return;
             }
             else if (action == 'c') {
                 cout << "you call" << endl;
-                sunkCost[posPlayer] = *valBet;
-                stack[posPlayer] -= *valBet - sunkCost[posPlayer];
+                *sunkCost = *valBet;
+                *stack -= *valBet - *sunkCost;
                 return;
             }
         }
@@ -150,15 +150,15 @@ void humanPlay(int *valBet, int *sunkCost, int *stack, bool *active, int posPlay
                 else if(playerBet < *valBet){ //　最小ベット額まだやってない
                     cout << "少なすぎるよ！" << endl;
                     continue;
-                }else if(playerBet > stack[posPlayer]){
+                }else if(playerBet > *stack){
                     cout << "持ってるチップより多いじゃん！" << endl;
                     continue;
                 }
                 break;
             }
-            stack[posPlayer] -= *valBet - sunkCost[posPlayer];
+            *stack -= *valBet - *sunkCost;
             *valBet = playerBet;
-            sunkCost[posPlayer] = playerBet;
+            *sunkCost = playerBet;
             cout << "you raise to " << *valBet << endl;
             return;
         }
@@ -216,61 +216,32 @@ void computerPlay(int *valBet, int *sunkCost, int *stack, bool *active, int comN
     }
 }
 
-void computerBetting(int *valBet, int *sunkCost, int *stack, bool *active, int i, bool *around, bool *allPlayed){
-    // bettingRoundで使う用。何回も書きたくないので小分け。
-    computerPlay(valBet, sunkCost+i, stack+i, active+i, i);
-    for (int j = 0; j < numPlayer; j++) {
-        if(active[j] && *valBet != sunkCost[j]) break;
-        if(j == numPlayer - 1) *around = true;
-    }
-    for (int j = i+1; j < numPlayer; j++) {
-        if(active[j]) break;
-        if(j == numPlayer - 1) *allPlayed = true;
-    }
-}
 
-void bettingRound(int *valBet, int *sunkCost, int *stack, bool *active, int posPlayer, int *position){
-    int i;
-    bool allPlayed = false; //判定方法的に全員一回プレイしたかを見る必要があるため。
+void bettingRound(int *valBet, int *sunkCost, int *stack, bool *active, int *position){
+    int i, j;
     displayAllHand(active, position);
     while(true) {
-        bool around = false, whileJump = false;
-        for (i = 0; i < posPlayer; i++) {
-            if(active[i]) {
-                computerBetting(valBet, sunkCost, stack, active, i, &around, &allPlayed);
-                if(around && allPlayed){
-                    whileJump = true;
-                    break;
-                }
-                around = false; // aroundがtrueのままだと一周したら自動で終わっちゃうので
+        bool allPlayed = false, around = false, whileJump = false;
+        for (i = 0; i < numPlayer; i++) {
+            if (position[i] == 0 && active[i]) {
+                humanPlay(valBet, sunkCost+i, stack+i, active+i);
+            }else if(active[i]){
+                computerPlay(valBet, sunkCost+i, stack+i, active+i, position[i]);
             }
-        }
-        if(whileJump) break;
-        if (active[posPlayer]) {
-            humanPlay(valBet, sunkCost, stack, active, posPlayer);
-            for (i = 0; i < numPlayer; i++) {
-                if(active[i]) {
-                    if (*valBet != sunkCost[i]) break;
-                }
-                if(i == numPlayer - 1) around = true;
+            for (j = 0; j < numPlayer; j++) {
+                if(active[j] && *valBet != sunkCost[j]) break;
+                if(j == numPlayer - 1) around = true;
             }
-            for (int j = posPlayer+1; j < numPlayer; j++) {
+            if(i == numPlayer - 1) allPlayed = true;
+            for (j = i+1; j < numPlayer; j++) {
                 if(active[j]) break;
                 if(j == numPlayer - 1) allPlayed = true;
             }
-            if(around && allPlayed) break;
-            around = false;
-        }
-        for (i = posPlayer+1; i < numPlayer; i++) {
-            if(active[i]) {
-                computerBetting(valBet, sunkCost, stack, active, i, &around, &allPlayed);
-                if(i == numPlayer-1) allPlayed = true;
-                if(around && allPlayed){
-                    whileJump = true;
-                    break;
-                }
-                around = false;
+            if(around && allPlayed){
+                whileJump = true;
+                break;
             }
+            around = false; // aroundがtrueのままだと一周したら自動で終わっちゃうので
         }
         if(whileJump) break;
     }
@@ -317,19 +288,19 @@ void displayBoard(char occ){ // ボード表示
     cout << endl;
 }
 
-void changeRound(int *valBet, int *sunkCost, char occ, int *stack, bool *active, int posPlayer, int *position){
+void changeRound(int *valBet, int *sunkCost, char occ, int *stack, bool *active, int *position){
     // ラウンド変更の際に呼び出し。3回あるので流石に何回も書くのはアホらしい。
     *valBet = 0;
     for(int i = 0; i < numPlayer; i++){
         *(sunkCost+i) = 0;
     }
     displayBoard(occ);
-    bettingRound(valBet, sunkCost, stack, active, posPlayer, position);
+    bettingRound(valBet, sunkCost, stack, active, position);
 }
 
 int main() {
     srand((unsigned int)time(NULL)); //　乱数初期化はmainでやらないとダメそうdamesou
-    int i, j, valBet = 2, posPlayer = 0;
+    int i, j, valBet = 2;
     decideNumPlayer();
     numPlayer++;
     int stack[numPlayer], sunkCost[numPlayer];
@@ -347,17 +318,15 @@ int main() {
     //for(i = 0; i < 1; i++) {
         shuffleCardList();
         dealHands();
-        bettingRound(&valBet, sunkCost, stack, active, posPlayer, position);
+        bettingRound(&valBet, sunkCost, stack, active, position);
         for(i = 0; i < 3; i++){
             board[i] = cardList[numPlayer*2+i];
         }
         board[3] = cardList[numPlayer*2+5];
         board[4] = cardList[numPlayer*2+7];
-        posPlayer += 2;
         for(i = 0; i < numPlayer; i++){
             cout << position[i] << endl;
         }
-        if(posPlayer >= numPlayer) posPlayer -= numPlayer;
         for(i = 0; i < numPlayer; i++){
             int index = (i - 2 + numPlayer) % numPlayer;
             int temsta[numPlayer], tempos[numPlayer];
@@ -376,10 +345,9 @@ int main() {
         for(i = 0; i < numPlayer; i++){
             cout << position[i] << endl;
         }
-        changeRound(&valBet, sunkCost, 'f', stack, active, posPlayer, position);
-        changeRound(&valBet, sunkCost, 't', stack, active, posPlayer, position);
-        changeRound(&valBet, sunkCost, 'r', stack, active, posPlayer, position);
+        changeRound(&valBet, sunkCost, 'f', stack, active, position);
+        changeRound(&valBet, sunkCost, 't', stack, active, position);
+        changeRound(&valBet, sunkCost, 'r', stack, active, position);
         cout << "showdown!" << endl;
     //}
 }
-
