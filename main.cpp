@@ -2,95 +2,23 @@
 #include <algorithm>
 #include <random>
 #include <vector>
-#include <map>
-#include <cstdlib>
-#include <ctime>
+#include "library/computer.h"
+#include "library/playing.h"
+#include "library/hands.h"
 
 using namespace std;
+#define card pair<int,char>
+#define hand pair<card,card>
 
-/* メモ的な。
+/*
+ * メモ的な。
  * これはポーカーをプレイするゲームです。
  * 今後はコンピュータを強くしてって最終的に人工知能の学習とかに持っていきたい。
  *
  * 今の所：コンピュータは全てのアクションを等確率で選択します。とても雑魚です。
  */
 
-int numPlayer;
-using card = pair<int, char>;
-using hand = pair<card, card>;
-vector<card> cardList(52);
-hand handList[10];
-vector<card> board(5);
-
-void decideNumPlayer(){ //　プレーヤー数を決める(10maxにした)
-    while(true) {
-        cout << "comは何人にしますか？(1~9人まで、半角英数字)" << endl;
-        cin >> numPlayer;
-        if (cin.fail()) {
-            cout << "半角英数字を入れてね！" << endl;
-            cin.clear();
-            cin.ignore(1024, '\n');
-            continue;
-        }
-        else if(numPlayer < 1){
-            cout << "1人でポーカーする気かい？comは1人以上にしてね！" << endl;
-            continue;
-        }else if(numPlayer > 9){
-            cout << "ちょっと多すぎるかなぁ…comは9人以下にしてね！" << endl;
-            continue;
-        }
-        break;
-    }
-};
-
-void initializecardList(){ //カード配列を生成
-    int i;
-    for(i = 0; i < 52; i++){
-        if(i / 13 == 0){
-            cardList[i] = make_pair(i + 1, 's');
-        }else if(i / 13 == 1){
-            cardList[i] = make_pair(i - 12, 'h');
-        }else if(i / 13 == 2){
-            cardList[i] = make_pair(i - 25, 'd');
-        }else{
-            cardList[i] = make_pair(i - 38, 'c');
-        }
-    }
-}
-
-void shuffleCardList(){ //カードをシャッフル
-    random_device rnd;
-    mt19937 mt(rnd());
-    shuffle(cardList.begin(), cardList.end(), mt);
-}
-
-void dealHands(){ //カードをくばる
-    int i;
-    for(i = 0; i < numPlayer*2; i++){
-        if(i < numPlayer){
-            handList[i].first = cardList[i];
-        }else{
-            handList[i%numPlayer].second = cardList[i];
-        }
-    }
-}
-
-void displayCard(card card1){ //カードの表示。1はAじゃないとね。
-    if(card1.first == 1) cout << 'A' << card1.second;
-    else if(card1.first == 13) cout << 'K' << card1.second;
-    else if(card1.first == 12) cout << 'Q' << card1.second;
-    else if(card1.first == 11) cout << 'J' << card1.second;
-    else if(card1.first == 10) cout << 'T' << card1.second;
-    else cout << card1.first << card1.second;
-}
-
-void displayHand(hand hand1){ //ハンドの表示。カードはpairで作ってるので表示がめんどい。
-    displayCard(hand1.first);
-    displayCard(hand1.second);
-    cout << endl;
-}
-
-void displayAllHand(bool *active, int *position){
+void displayAllHand(const bool *active, int *position){
     // 卓の人のカードを全部表示。将来なくなるorショーダウンで使うかな？
     int i;
     for(i = 0; i < numPlayer; i++){
@@ -169,9 +97,11 @@ void humanPlay(int *valBet, int *sunkCost, int *stack, bool *active){
 
 void computerPlay(int *valBet, int *sunkCost, int *stack, bool *active, int comNum){
     // comのプレイ方法。将来はここをいじる。現在クソザコマシーン。23oでもプッシュします。
-    int percent;
+    std::random_device rnd;     // 非決定的な乱数生成器
+    std::mt19937 mt(rnd());
+    long percent;
     if(*valBet == *sunkCost){
-        percent = rand() % 2;
+        percent = mt() % 2;
         if (percent == 0) {
             cout << "com" << comNum << " check" << endl;
         }else{
@@ -183,7 +113,7 @@ void computerPlay(int *valBet, int *sunkCost, int *stack, bool *active, int comN
     }
     else {
         if(*sunkCost + *stack > *valBet) {
-            percent = rand() % 3;
+            percent = mt() % 3;
             if (percent == 0) {
                 *active = false;
                 cout << "com" << comNum << " fold" << endl;
@@ -202,7 +132,7 @@ void computerPlay(int *valBet, int *sunkCost, int *stack, bool *active, int comN
                 }
             }
         }else{
-            percent = rand() % 2;
+            percent = mt() % 2;
             if (percent == 0) {
                 *active = false;
                 cout << "com" << comNum << " fold" << endl;
@@ -334,8 +264,7 @@ void performRound(int *valBet, int *sunkCost, char occ, int *stack, bool *active
 }
 
 int main() {
-    srand((unsigned int)time(NULL)); //　乱数初期化はmainでやらないとダメそう
-    int i, j, valBet = 2;
+    int i, valBet = 2;
     decideNumPlayer();
     numPlayer++;
     int stack[numPlayer], sunkCost[numPlayer];
