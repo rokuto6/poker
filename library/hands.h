@@ -12,14 +12,14 @@ using namespace std;
 #define hand pair<card,card>
 
 extern vector<card> cardList;
-extern hand handList[];
 extern vector<card> board;
 
 extern void initializecardList();
 extern void shuffleCardList();
 extern void dealHands();
-void displayCard(card);
-void displayHand(hand);
-
+extern void displayCard(card);
+extern void displayHand(hand);
+extern void displayAllHand();
+extern void displayBoard(char);
 
 #endif //LIBRARY_HANDS_H
